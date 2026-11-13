@@ -28,7 +28,8 @@ def verify(root: Path, manifest_path: Path) -> list[str]:
         if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
             errors.append(f"Missing or invalid SHA-256: {relative}")
             continue
-        digest = hashlib.file_digest(asset.open("rb"), "sha256").hexdigest()
+        with asset.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
         if digest != expected:
             errors.append(f"SHA-256 mismatch: {relative}")
     if not data.get("assets"):
@@ -52,7 +53,7 @@ def main() -> int:
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
-        return 1 if args.require_model else 0
+        return 1
     print("Offline model assets passed integrity and license preflight")
     return 0
 
