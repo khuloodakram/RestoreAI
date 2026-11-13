@@ -15,6 +15,7 @@ class ScratchMaskEditor extends StatefulWidget {
 
 class _ScratchMaskEditorState extends State<ScratchMaskEditor> {
   final List<List<Offset>> _strokes = [];
+  final List<double> _strokeWidths = [];
   double _brush = 9;
   bool _saving = false;
   String tr(String ar, String en) => widget.arabic ? ar : en;
@@ -30,10 +31,12 @@ class _ScratchMaskEditorState extends State<ScratchMaskEditor> {
     final paint = Paint()..color = Colors.white..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke
       ..strokeWidth = _brush;
-    for (final points in _strokes) {
+    for (var i = 0; i < _strokes.length; i++) {
+      final points = _strokes[i];
+      paint.strokeWidth = _strokeWidths[i];
       if (points.isEmpty) continue;
       if (points.length == 1) {
-        canvas.drawCircle(points.first, _brush / 2, Paint()..color = Colors.white);
+        canvas.drawCircle(points.first, _strokeWidths[i] / 2, Paint()..color = Colors.white);
       } else {
         final path = Path()..moveTo(points.first.dx, points.first.dy);
         for (final point in points.skip(1)) { path.lineTo(point.dx, point.dy); }
@@ -71,18 +74,27 @@ class _ScratchMaskEditorState extends State<ScratchMaskEditor> {
         child: LayoutBuilder(builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           return GestureDetector(
-            onPanStart: (d) => setState(() => _strokes.add([_toImage(d.localPosition, size)])),
+            onPanStart: (d) => setState(() {
+              _strokes.add([_toImage(d.localPosition, size)]);
+              _strokeWidths.add(_brush);
+            }),
             onPanUpdate: (d) => setState(() => _strokes.last.add(_toImage(d.localPosition, size))),
             child: Stack(fit: StackFit.expand, children: [
               Image.memory(widget.imageBytes, fit: BoxFit.fill),
               CustomPaint(painter: _StrokePreview(_strokes, widget.width.toDouble(),
-                widget.height.toDouble(), _brush)),
+                widget.height.toDouble(), _strokeWidths)),
             ]));
         })))),
       Row(children: [
-        IconButton(onPressed: _strokes.isEmpty ? null : () => setState(() => _strokes.removeLast()),
+        IconButton(onPressed: _strokes.isEmpty ? null : () => setState(() {
+            _strokes.removeLast();
+            _strokeWidths.removeLast();
+          }),
           icon: const Icon(Icons.undo), tooltip: tr('تراجع', 'Undo')),
-        IconButton(onPressed: _strokes.isEmpty ? null : () => setState(_strokes.clear),
+        IconButton(onPressed: _strokes.isEmpty ? null : () => setState(() {
+            _strokes.clear();
+            _strokeWidths.clear();
+          }),
           icon: const Icon(Icons.delete_outline), tooltip: tr('مسح الكل', 'Clear all')),
         Expanded(child: Slider(value: _brush, min: 2, max: 40,
           label: _brush.round().toString(), onChanged: (v) => setState(() => _brush = v))),
@@ -91,20 +103,23 @@ class _ScratchMaskEditorState extends State<ScratchMaskEditor> {
 }
 
 class _StrokePreview extends CustomPainter {
-  _StrokePreview(this.strokes, this.width, this.height, this.brush);
+  _StrokePreview(this.strokes, this.width, this.height, this.strokeWidths);
   final List<List<Offset>> strokes;
-  final double width, height, brush;
+  final double width, height;
+  final List<double> strokeWidths;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.width / width, size.height / height);
     final paint = Paint()..color = const Color(0xBFFF5252)
-      ..strokeWidth = brush..strokeCap = StrokeCap.round
+      ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
-    for (final points in strokes) {
+    for (var i = 0; i < strokes.length; i++) {
+      final points = strokes[i];
+      paint.strokeWidth = strokeWidths[i];
       if (points.isEmpty) continue;
       if (points.length == 1) {
-        canvas.drawCircle(points.first, brush / 2, Paint()..color = paint.color);
+        canvas.drawCircle(points.first, strokeWidths[i] / 2, Paint()..color = paint.color);
       } else {
         final path = Path()..moveTo(points.first.dx, points.first.dy);
         for (final point in points.skip(1)) { path.lineTo(point.dx, point.dy); }
