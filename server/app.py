@@ -88,8 +88,9 @@ def detect_scratch_mask(image):
     return cv2.dilate(clean, np.ones((3, 3), np.uint8), iterations=1)
 
 
-def restore_visible_scratches(image):
-    mask = detect_scratch_mask(image)
+def restore_visible_scratches(image, mask=None):
+    if mask is None:
+        mask = detect_scratch_mask(image)
     if not np.any(mask):
         return image
     rgb = np.asarray(image.convert('RGB'))
@@ -97,10 +98,11 @@ def restore_visible_scratches(image):
     return Image.fromarray(cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB))
 
 
-def restore_with_lama(image):
+def restore_with_lama(image, mask=None):
     """Optional pretrained LaMa inpainting. Never silently substitute OpenCV."""
     global _lama_model
-    mask = detect_scratch_mask(image)
+    if mask is None:
+        mask = detect_scratch_mask(image)
     if not np.any(mask):
         return image
     if _lama_model is None:
@@ -120,7 +122,8 @@ def health():
 
 
 @app.post("/enhance")
-async def enhance(image: UploadFile = File(...), mode: str = Form("enhance")):
+async def enhance(image: UploadFile = File(...), mode: str = Form("enhance"),
+                  mask: UploadFile | None = File(None)):
     if mode not in ("enhance", "restore"):
         raise HTTPException(422, "Unsupported mode")
     if image.content_type not in ("image/png", "image/jpeg", "image/webp"):
@@ -140,14 +143,31 @@ async def enhance(image: UploadFile = File(...), mode: str = Form("enhance")):
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
         raise HTTPException(400, "Invalid image")
 
+    custom_mask = None
+    if mask is not None:
+        if mode != "restore":
+            raise HTTPException(422, "Mask requires restore mode")
+        raw_mask = await mask.read(MAX_BYTES + 1)
+        if not raw_mask or len(raw_mask) > MAX_BYTES:
+            raise HTTPException(413, "Invalid mask size")
+        try:
+            with Image.open(io.BytesIO(raw_mask)) as opened_mask:
+                opened_mask.load()
+                if opened_mask.size != rgb.size:
+                    raise HTTPException(422, "Mask dimensions must match source image")
+                custom_mask = np.asarray(opened_mask.convert("L"))
+                custom_mask = np.where(custom_mask > 127, 255, 0).astype(np.uint8)
+        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+            raise HTTPException(400, "Invalid mask image")
+
     try:
         with _lock:
             if mode == 'restore':
                 engine = os.getenv('RESTOREAI_RESTORE_ENGINE', 'opencv').lower()
                 if engine == 'lama':
-                    source = restore_with_lama(rgb)
+                    source = restore_with_lama(rgb, custom_mask)
                 elif engine == 'opencv':
-                    source = restore_visible_scratches(rgb)
+                    source = restore_visible_scratches(rgb, custom_mask)
                 else:
                     raise RuntimeError('Unknown restoration engine')
             else:
