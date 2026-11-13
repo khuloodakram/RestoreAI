@@ -82,6 +82,16 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         restore.assert_called_once()
 
+    def test_lama_engine_routing(self):
+        with patch.dict("os.environ", {"RESTOREAI_RESTORE_ENGINE": "lama"}), \
+             patch("server.app.restore_with_lama", side_effect=lambda im: im) as lama, \
+             patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64))):
+            response = client.post("/enhance",
+                files={"image": ("a.png", png(), "image/png")},
+                data={"mode": "restore"})
+        self.assertEqual(response.status_code, 200)
+        lama.assert_called_once()
+
     def test_invalid_mode(self):
         response = client.post("/enhance",
             files={"image": ("a.png", png(), "image/png")},
