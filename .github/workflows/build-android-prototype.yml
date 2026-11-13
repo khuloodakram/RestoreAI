@@ -28,7 +28,9 @@ jobs:
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
           text = text.replace('android:label="restoreai"', 'android:label="RestoreAI"')
-          if 'android.permission.INTERNET' not in text:\n              text = text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\\n    <application', 1)\n          manifest.write_text(text)
+          if 'android.permission.INTERNET' not in text:
+              text = text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\\n    <application', 1)
+          manifest.write_text(text)
           PYTHON
           dart run flutter_launcher_icons
       - name: Analyze Flutter source
