@@ -62,6 +62,21 @@ class APITests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_restore_mode_runs_scratch_stage(self):
+        with patch("server.app.restore_visible_scratches", side_effect=lambda im: im) as restore, \
+             patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64), "blue")):
+            response = client.post("/enhance",
+                files={"image": ("a.png", png(), "image/png")},
+                data={"mode": "restore"})
+        self.assertEqual(response.status_code, 200)
+        restore.assert_called_once()
+
+    def test_invalid_mode(self):
+        response = client.post("/enhance",
+            files={"image": ("a.png", png(), "image/png")},
+            data={"mode": "invalid"})
+        self.assertEqual(response.status_code, 422)
+
     def test_enhance_response_and_dimensions(self):
         # Tests HTTP integration, not model quality or actual GPU inference.
         with patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64), "blue")):
