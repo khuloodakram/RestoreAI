@@ -5,6 +5,7 @@ import 'package:restoreai/main.dart';
 void main() {
   testWidgets('Colab server dialog opens and closes safely', (tester) async {
     await tester.pumpWidget(const RestoreAIApp());
+    await tester.ensureVisible(find.text('ربط خادم Colab المؤقت'));
     await tester.tap(find.text('ربط خادم Colab المؤقت'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
@@ -16,6 +17,7 @@ void main() {
 
   testWidgets('Colab server dialog can submit a valid HTTPS URL', (tester) async {
     await tester.pumpWidget(const RestoreAIApp());
+    await tester.ensureVisible(find.text('ربط خادم Colab المؤقت'));
     await tester.tap(find.text('ربط خادم Colab المؤقت'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first,
