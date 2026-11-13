@@ -106,7 +106,7 @@ class _RestoreHomeState extends State<RestoreHome> {
               ),
             ),
             const SizedBox(height: 12),
-            const FilledButton.icon(
+            FilledButton.icon(
               onPressed: null,
               icon: Icon(Icons.auto_fix_high),
               label: Text('Enhance photo — coming after Android AI verification'),
