@@ -1,6 +1,13 @@
 name: Build RestoreAI Android prototype
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'assets/icon/**'
+      - '.github/workflows/build-android-prototype.yml'
   push:
     paths:
       - 'lib/**'
@@ -28,16 +35,23 @@ jobs:
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
           text = text.replace('android:label="restoreai"', 'android:label="RestoreAI"')
+          if 'android.permission.INTERNET' not in text:
+              text = text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
           manifest.write_text(text)
           PYTHON
           dart run flutter_launcher_icons
       - name: Analyze Flutter source
-        run: flutter analyze --no-fatal-infos lib/main.dart
+        run: flutter analyze --no-fatal-infos lib/
+      - name: Test Flutter UI
+        run: |
+          # flutter create generates a default counter test for a different app.
+          rm -f test/widget_test.dart
+          flutter test test/server_dialog_test.dart
       - name: Build Android APK
         run: flutter build apk --debug
       - name: Upload prototype APK
         uses: actions/upload-artifact@v4
         with:
-          name: RestoreAI-Phase2-UI-Prototype-APK
+          name: RestoreAI-UI-Demo-No-Live-Server-APK
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error

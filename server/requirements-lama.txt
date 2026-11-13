@@ -1,0 +1,3 @@
+# Optional learned inpainting engine; install on a compatible GPU host.
+# This package may download pretrained weights on first use.
+simple-lama-inpainting
