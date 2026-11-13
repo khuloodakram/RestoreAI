@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'scratch_mask_editor.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -79,6 +80,7 @@ class _RestoreHomeState extends State<RestoreHome> {
   final ImagePicker _picker = ImagePicker();
   XFile? _selected;
   XFile? _mask;
+  Uint8List? _drawnMask;
   Uint8List? _enhanced;
   String? _savedPath;
   String? _error;
@@ -96,6 +98,7 @@ class _RestoreHomeState extends State<RestoreHome> {
       setState(() {
         _selected = image;
         _mask = null;
+        _drawnMask = null;
         _enhanced = null;
         _savedPath = null;
         _error = null;
@@ -120,11 +123,31 @@ class _RestoreHomeState extends State<RestoreHome> {
         throw const FormatException('mask_dimensions');
       }
       if (!mounted) return;
-      setState(() { _mask = selected; _error = null; });
+      setState(() { _mask = selected; _drawnMask = null; _error = null; });
     } catch (_) {
       if (mounted) setState(() => _error = tr(
         'يجب أن تكون صورة القناع بنفس أبعاد الصورة الأصلية.',
         'The mask must match the original photo dimensions.'));
+    }
+  }
+
+  Future<void> _drawMask() async {
+    if (_selected == null || _busy) return;
+    try {
+      final bytes = await _selected!.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) throw const FormatException('invalid_image');
+      if (!mounted) return;
+      final mask = await Navigator.of(context).push<Uint8List>(MaterialPageRoute(
+        builder: (_) => ScratchMaskEditor(imageBytes: bytes,
+          width: decoded.width, height: decoded.height, arabic: widget.arabic)));
+      if (mask != null && mounted) {
+        setState(() { _drawnMask = mask; _mask = null; _error = null; });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = tr(
+        'تعذر فتح محرر الخدوش لهذه الصورة.',
+        'Could not open scratch editor for this image.'));
     }
   }
 
@@ -200,8 +223,8 @@ class _RestoreHomeState extends State<RestoreHome> {
       request.add(utf8Bytes('\r\n--$boundary\r\n'
           'Content-Disposition: form-data; name="mode"\r\n\r\n'
           '${_restoreScratches ? 'restore' : 'enhance'}'));
-      if (_restoreScratches && _mask != null) {
-        final maskBytes = await _mask!.readAsBytes();
+      if (_restoreScratches && (_mask != null || _drawnMask != null)) {
+        final maskBytes = _drawnMask ?? await _mask!.readAsBytes();
         if (maskBytes.isEmpty || maskBytes.length > 8 * 1024 * 1024) {
           throw const FormatException('mask_too_large');
         }
@@ -342,19 +365,27 @@ class _RestoreHomeState extends State<RestoreHome> {
               ),
               if (_restoreScratches && _selected != null) ...[
                 const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : _drawMask,
+                  icon: const Icon(Icons.draw_outlined),
+                  label: Text(tr('ارسم فوق الخدوش', 'Paint over scratches')),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _pickMask,
                   icon: const Icon(Icons.brush_outlined),
                   label: Text(tr('اختيار قناع خدوش (اختياري)', 'Choose scratch mask (optional)')),
                 ),
-                if (_mask != null) ...[
+                if (_mask != null || _drawnMask != null) ...[
                   const SizedBox(height: 8),
                   Text(tr('معاينة القناع: الأبيض يُرمَّم والأسود يُحفَظ',
                       'Mask preview: white is repaired, black is preserved'),
                       textAlign: TextAlign.center),
-                  SizedBox(height: 140, child: Image.file(File(_mask!.path), fit: BoxFit.contain)),
+                  SizedBox(height: 140, child: _drawnMask != null
+                    ? Image.memory(_drawnMask!, fit: BoxFit.contain)
+                    : Image.file(File(_mask!.path), fit: BoxFit.contain)),
                   TextButton.icon(
-                    onPressed: _busy ? null : () => setState(() => _mask = null),
+                    onPressed: _busy ? null : () => setState(() { _mask = null; _drawnMask = null; }),
                     icon: const Icon(Icons.close),
                     label: Text(tr('إزالة القناع', 'Remove mask')),
                   ),
