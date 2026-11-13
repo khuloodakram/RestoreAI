@@ -24,7 +24,7 @@ Expose the app through a trusted HTTPS reverse proxy with rate limits, request-s
 ## Endpoints
 
 - `GET /health` returns GPU and weights availability; it is not a full inference check.
-- `POST /enhance` accepts multipart field `image`, JPEG/PNG/WebP, max 8 MB, max 2 megapixels. Returns PNG with 4x width and height.
+- `POST /enhance` accepts multipart field `image`, JPEG/PNG/WebP, max 8 MB, max 2 megapixels. Returns PNG with 4x width and height. Optional multipart field `mode` accepts `enhance` (default) or `restore`. `restore` applies conservative automatic bright-scratch detection and OpenCV inpainting before Real-ESRGAN upscaling; it is **not** a generative restoration model, and deep or facial scratches may remain.
 
 Real-ESRGAN performs **super-resolution**, not guaranteed scratch removal or face restoration. A separate restoration pipeline needs validation.
 
@@ -42,6 +42,6 @@ Without that value, the Enhance button stays disabled. Never put private tokens 
 
 - Choose and configure a reliable GPU host and HTTPS domain
 - Add authentication, privacy policy, upload retention controls, abuse prevention
-- Verify inference with real test photos, including scratch and face-quality cases
+- Verify inference with real test photos, including scratch and face-quality cases; synthetic scratch regression tests are not proof of portrait quality
 - Test Android networking, save/export and user experience on physical devices
 - Configure Android release signing and distribution
