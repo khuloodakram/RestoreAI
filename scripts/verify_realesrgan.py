@@ -52,6 +52,15 @@ def main():
     print('Release:', release.get('tag_name'), 'Asset:', asset['name'], flush=True)
     archive = ROOT / 'release.zip'
     download(asset['browser_download_url'], archive)
+    
+    models_archive = ROOT / 'models-release.zip'
+    models_url = (
+        'https://github.com/xinntao/Real-ESRGAN/releases/'
+        'download/v0.2.5.0/'
+        'realesrgan-ncnn-vulkan-20220424-ubuntu.zip'
+    )
+    download(models_url, models_archive)
+
     unpack = ROOT / 'unpacked'
     unpack.mkdir(exist_ok=True)
     with zipfile.ZipFile(archive) as z:
@@ -62,6 +71,16 @@ def main():
             if member.file_size > 500_000_000:
                 raise RuntimeError('Unexpectedly large file')
         z.extractall(unpack)
+        
+    with zipfile.ZipFile(models_archive) as z:
+        for member in z.infolist():
+            dest = (unpack / member.filename).resolve()
+            if not dest.is_relative_to(unpack.resolve()):
+                raise RuntimeError('Unsafe model archive path')
+            if member.file_size > 500_000_000:
+                raise RuntimeError('Unexpectedly large model file')
+        z.extractall(unpack)
+
     executables = [p for p in unpack.rglob('realesrgan-ncnn-vulkan') if p.is_file()]
     if not executables:
         raise RuntimeError('Executable missing from official Linux archive')
