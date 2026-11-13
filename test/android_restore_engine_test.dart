@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoreai/offline/android_restore_engine.dart';
@@ -8,7 +9,12 @@ void main() {
   const channel = MethodChannel('restoreai/offline_inference');
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
+  setUp(() {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  });
+
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     messenger.setMockMethodCallHandler(channel, null);
   });
 
