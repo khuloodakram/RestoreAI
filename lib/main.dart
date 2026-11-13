@@ -119,7 +119,7 @@ class _RestoreHomeState extends State<RestoreHome> {
           : extension == 'webp' ? 'photo.webp' : 'photo.jpg';
       request.add(utf8Bytes('--$boundary\r\n'
           'Content-Disposition: form-data; name="image"; filename="$name"\r\n'
-          'Content-Type: image/jpeg\r\n\r\n'));
+          'Content-Type: $mime\r\n\r\n'));
       request.add(bytes);
       request.add(utf8Bytes('\r\n--$boundary--\r\n'));
       final response = await request.close().timeout(const Duration(minutes: 3));
@@ -143,7 +143,7 @@ class _RestoreHomeState extends State<RestoreHome> {
       }
     } finally {
       client.close(force: true);
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {\n        setState(() => _busy = false);\n      }
     }
   }
 
