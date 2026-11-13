@@ -113,7 +113,7 @@ class _RestoreHomeState extends State<RestoreHome> {
       final boundary = 'restoreai-upload-boundary';
       request.headers.set(HttpHeaders.contentTypeHeader,
           'multipart/form-data; boundary=$boundary');
-      final name = _selected!.name.replaceAll('"', '');
+      const name = 'photo.jpg';
       request.add(utf8Bytes('--$boundary\r\n'
           'Content-Disposition: form-data; name="image"; filename="$name"\r\n'
           'Content-Type: image/jpeg\r\n\r\n'));
