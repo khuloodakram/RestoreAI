@@ -49,3 +49,7 @@ Without that value, the Enhance button stays disabled. Never put private tokens 
 ## Optional pretrained LaMa restoration (experimental)
 
 Install `pip install -r server/requirements-lama.txt` on a compatible GPU runtime, then set `RESTOREAI_RESTORE_ENGINE=lama` before starting the API. The first request may download pretrained LaMa weights; provision network access and persistent model cache. The default `opencv` engine is intentionally retained for existing installations. With `lama`, the automatic mask detector still limits quality: missed scratches remain and false positives can alter facial details. A future manual mask editor and portrait validation are required before claiming professional scratch restoration. If LaMa cannot load, the API reports an error instead of silently returning an OpenCV result. Do not run this in production without checking model licensing, security, and photo privacy.
+
+## Optional precise scratch mask
+
+`POST /enhance` with `mode=restore` also accepts multipart `mask` as a grayscale PNG **with exactly the same pixel dimensions as the uploaded image**. White pixels (>127) are repaired; black pixels are untouched. When omitted, the experimental automatic detector is used. This makes it possible to repair scratches missed by automatic detection without changing unrelated facial features. The Flutter UI does not yet include a manual mask painter; this API option is intended for the upcoming editor and controlled tests. Never commit users' personal photos or masks to a public repository.
