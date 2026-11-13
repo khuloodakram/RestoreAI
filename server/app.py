@@ -20,6 +20,7 @@ TILE = 192
 PAD = 16
 _lock = threading.Lock()
 _model = None
+_lama_model = None
 
 
 def get_model():
@@ -63,8 +64,8 @@ def enhance_tiled(image):
 
 
 
-def restore_visible_scratches(image):
-    """Conservative automatic thin bright-scratch cleanup; not a generative model.
+def detect_scratch_mask(image):
+    """Conservative automatic thin bright-scratch mask; not a learned detector.
 
     Avoid aggressive masks on faces: detection can confuse highlights and hair.
     """
@@ -84,17 +85,38 @@ def restore_visible_scratches(image):
         x, y, w, h, area = stats[i]
         if 10 <= area <= 1500 and max(w, h) >= 12 and area / max(w * h, 1) < 0.48:
             clean[labels == i] = 255
-    if not np.any(clean):
+    return cv2.dilate(clean, np.ones((3, 3), np.uint8), iterations=1)
+
+
+def restore_visible_scratches(image):
+    mask = detect_scratch_mask(image)
+    if not np.any(mask):
         return image
-    clean = cv2.dilate(clean, np.ones((3, 3), np.uint8), iterations=1)
-    repaired = cv2.inpaint(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), clean, 3, cv2.INPAINT_TELEA)
+    rgb = np.asarray(image.convert('RGB'))
+    repaired = cv2.inpaint(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), mask, 3, cv2.INPAINT_TELEA)
     return Image.fromarray(cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB))
+
+
+def restore_with_lama(image):
+    """Optional pretrained LaMa inpainting. Never silently substitute OpenCV."""
+    global _lama_model
+    mask = detect_scratch_mask(image)
+    if not np.any(mask):
+        return image
+    if _lama_model is None:
+        try:
+            from simple_lama_inpainting import SimpleLama
+        except ImportError as exc:
+            raise RuntimeError('LaMa dependency missing') from exc
+        _lama_model = SimpleLama()
+    return _lama_model(image.convert('RGB'), Image.fromarray(mask, mode='L'))
 
 @app.get("/health")
 def health():
     return {"status": "ok", "gpu": torch.cuda.is_available(),
             "weights_found": WEIGHTS.is_file(), "model_loaded": _model is not None,
-            "version": "0.4.0"}
+            "version": "0.5.0",
+            "restoration_engine": os.getenv("RESTOREAI_RESTORE_ENGINE", "opencv")}
 
 
 @app.post("/enhance")
@@ -120,7 +142,16 @@ async def enhance(image: UploadFile = File(...), mode: str = Form("enhance")):
 
     try:
         with _lock:
-            source = restore_visible_scratches(rgb) if mode == 'restore' else rgb
+            if mode == 'restore':
+                engine = os.getenv('RESTOREAI_RESTORE_ENGINE', 'opencv').lower()
+                if engine == 'lama':
+                    source = restore_with_lama(rgb)
+                elif engine == 'opencv':
+                    source = restore_visible_scratches(rgb)
+                else:
+                    raise RuntimeError('Unknown restoration engine')
+            else:
+                source = rgb
             enhanced = enhance_tiled(source)
         output = io.BytesIO()
         enhanced.save(output, format="PNG")
