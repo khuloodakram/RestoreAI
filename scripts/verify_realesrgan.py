@@ -105,7 +105,7 @@ def main():
     src = ROOT / 'input.png'
     dst = ROOT / 'enhanced.png'
     make_png(src)
-    command = [str(exe), '-i', str(src), '-o', str(dst), '-n', model_name, '-m', str(model_dir), '-s', '4', '-g', '-1', '-t', '32', '-v']
+    command = [str(exe), '-i', str(src), '-o', str(dst), '-n', model_name, '-m', str(model_dir), '-s', '4', '-g', '0', '-t', '32', '-v']
     print('Executing:', ' '.join(command), flush=True)
     result = subprocess.run(command, cwd=exe.parent, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
     print(result.stdout[-12000:], flush=True)
