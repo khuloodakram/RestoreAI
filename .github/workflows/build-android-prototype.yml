@@ -68,6 +68,17 @@ jobs:
         run: flutter test test/offline_restore_pipeline_test.dart test/android_restore_engine_test.dart
       - name: Build Android APK
         run: flutter build apk --release
+      - name: Verify release APK permissions
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          test -n "$AAPT"
+          "$AAPT" dump permissions "$APK" | tee /tmp/restoreai-permissions.txt
+          if grep -q 'android.permission.INTERNET' /tmp/restoreai-permissions.txt; then
+            echo 'Release APK unexpectedly requests Internet permission'
+            exit 1
+          fi
       - name: Upload prototype APK
         uses: actions/upload-artifact@v4
         with:
