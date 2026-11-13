@@ -78,6 +78,7 @@ class RestoreHome extends StatefulWidget {
 class _RestoreHomeState extends State<RestoreHome> {
   final ImagePicker _picker = ImagePicker();
   XFile? _selected;
+  XFile? _mask;
   Uint8List? _enhanced;
   String? _savedPath;
   String? _error;
@@ -94,6 +95,7 @@ class _RestoreHomeState extends State<RestoreHome> {
       if (!mounted || image == null) return;
       setState(() {
         _selected = image;
+        _mask = null;
         _enhanced = null;
         _savedPath = null;
         _error = null;
@@ -103,6 +105,26 @@ class _RestoreHomeState extends State<RestoreHome> {
         setState(() => _error = tr('تعذر فتح معرض الصور.',
             'Could not open the photo gallery.'));
       }
+    }
+  }
+
+  Future<void> _pickMask() async {
+    if (_busy || _selected == null) return;
+    try {
+      final selected = await _picker.pickImage(source: ImageSource.gallery);
+      if (selected == null) return;
+      final source = img.decodeImage(await _selected!.readAsBytes());
+      final maskImage = img.decodeImage(await selected.readAsBytes());
+      if (source == null || maskImage == null ||
+          source.width != maskImage.width || source.height != maskImage.height) {
+        throw const FormatException('mask_dimensions');
+      }
+      if (!mounted) return;
+      setState(() { _mask = selected; _error = null; });
+    } catch (_) {
+      if (mounted) setState(() => _error = tr(
+        'يجب أن تكون صورة القناع بنفس أبعاد الصورة الأصلية.',
+        'The mask must match the original photo dimensions.'));
     }
   }
 
@@ -178,7 +200,20 @@ class _RestoreHomeState extends State<RestoreHome> {
       request.add(utf8Bytes('\r\n--$boundary\r\n'
           'Content-Disposition: form-data; name="mode"\r\n\r\n'
           '${_restoreScratches ? 'restore' : 'enhance'}'));
-      request.add(utf8Bytes('\r\n--$boundary--\r\n'));
+      if (_restoreScratches && _mask != null) {
+        final maskBytes = await _mask!.readAsBytes();
+        if (maskBytes.isEmpty || maskBytes.length > 8 * 1024 * 1024) {
+          throw const FormatException('mask_too_large');
+        }
+        request.add(utf8Bytes('\\r\\n--$boundary\\r\\n'
+            'Content-Disposition: form-data; name="mask"; filename="mask.png"\\r\\n'
+            'Content-Type: image/png\\r\\n\\r\\n'));
+        // Decode and re-encode as PNG, regardless of selected file extension.
+        final maskImage = img.decodeImage(maskBytes);
+        if (maskImage == null) throw const FormatException('invalid_mask');
+        request.add(img.encodePng(maskImage));
+      }
+      request.add(utf8Bytes('\\r\\n--$boundary--\\r\\n'));
       final response = await request.close().timeout(const Duration(minutes: 3));
       const maxResponseBytes = 96 * 1024 * 1024;
       if (response.contentLength > maxResponseBytes) {
@@ -223,7 +258,9 @@ class _RestoreHomeState extends State<RestoreHome> {
     if (_enhanced == null) return;
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/restoreai_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final isPng = _enhanced!.length >= 8 && _enhanced![0] == 137 && _enhanced![1] == 80 && _enhanced![2] == 78 && _enhanced![3] == 71;
+      final extension = isPng ? 'png' : 'jpg';
+      final file = File('${directory.path}/restoreai_${DateTime.now().millisecondsSinceEpoch}.$extension');
       await file.writeAsBytes(_enhanced!, flush: true);
       if (mounted) setState(() => _savedPath = file.path);
     } catch (_) {
@@ -303,6 +340,15 @@ class _RestoreHomeState extends State<RestoreHome> {
                 selected: {_restoreScratches},
                 onSelectionChanged: (value) => setState(() => _restoreScratches = value.first),
               ),
+              if (_restoreScratches && _selected != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _pickMask,
+                  icon: const Icon(Icons.brush_outlined),
+                  label: Text(tr('اختيار قناع خدوش (اختياري)', 'Choose scratch mask (optional)')),
+                ),
+                if (_mask != null) Text(tr('تم اختيار قناع الخدوش', 'Scratch mask selected'), textAlign: TextAlign.center),
+              ],
               const SizedBox(height: 22),
               FilledButton.icon(
                 onPressed: _busy ? null : _pickImage,
