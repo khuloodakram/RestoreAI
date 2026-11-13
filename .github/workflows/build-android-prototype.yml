@@ -1,0 +1,43 @@
+name: Build RestoreAI Android prototype
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'assets/icon/**'
+      - '.github/workflows/build-android-prototype.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate missing Flutter Android scaffold
+        run: |
+          flutter create --platforms=android --project-name restoreai --org com.restoreai .
+          flutter pub get
+      - name: Set Android display name and launcher icon
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          text = text.replace('android:label="restoreai"', 'android:label="RestoreAI"')
+          manifest.write_text(text)
+          PYTHON
+          dart run flutter_launcher_icons
+      - name: Analyze Flutter source
+        run: flutter analyze lib/main.dart
+      - name: Build Android APK
+        run: flutter build apk --debug
+      - name: Upload prototype APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RestoreAI-Phase2-UI-Prototype-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
