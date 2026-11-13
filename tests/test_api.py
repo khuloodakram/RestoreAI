@@ -92,6 +92,23 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         lama.assert_called_once()
 
+    def test_custom_mask_is_forwarded(self):
+        with patch("server.app.restore_visible_scratches", side_effect=lambda im, mask: im) as restore, \
+             patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64))):
+            response = client.post("/enhance",
+                files={"image": ("a.png", png(), "image/png"),
+                       "mask": ("mask.png", png(), "image/png")},
+                data={"mode": "restore"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(restore.call_args.args[1].shape, (16, 16))
+
+    def test_custom_mask_size_mismatch(self):
+        response = client.post("/enhance",
+            files={"image": ("a.png", png(), "image/png"),
+                   "mask": ("mask.png", png(8, 8), "image/png")},
+            data={"mode": "restore"})
+        self.assertEqual(response.status_code, 422)
+
     def test_invalid_mode(self):
         response = client.post("/enhance",
             files={"image": ("a.png", png(), "image/png")},
