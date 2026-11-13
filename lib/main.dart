@@ -147,7 +147,7 @@ class _RestoreHomeState extends State<RestoreHome> {
     } catch (_) {
       if (mounted) {
         setState(() => _error = tr(
-            'فشل التحسين. تأكدي من تشغيل خادم الذكاء الاصطناعي وحاولي مجددًا.',
+            'فشل التحسين. يرجى التحقق من تشغيل خادم الذكاء الاصطناعي ثم إعادة المحاولة.',
             'Enhancement failed. Check that the AI server is running and retry.'));
       }
     } finally {
@@ -197,7 +197,7 @@ class _RestoreHomeState extends State<RestoreHome> {
               const Icon(Icons.auto_awesome,
                   color: Color(0xFFAA95FF), size: 48),
               const SizedBox(height: 16),
-              Text(tr('أعيدي الحياة إلى صورك',
+              Text(tr('صورك تستحق حياة جديدة',
                   'Bring your photos back to life'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
