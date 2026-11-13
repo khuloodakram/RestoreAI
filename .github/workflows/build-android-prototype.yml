@@ -43,7 +43,10 @@ jobs:
       - name: Analyze Flutter source
         run: flutter analyze --no-fatal-infos lib/
       - name: Test Flutter UI
-        run: flutter test
+        run: |
+          # flutter create generates a default counter test for a different app.
+          rm -f test/widget_test.dart
+          flutter test test/server_dialog_test.dart
       - name: Build Android APK
         run: flutter build apk --debug
       - name: Upload prototype APK
