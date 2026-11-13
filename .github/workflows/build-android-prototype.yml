@@ -46,6 +46,12 @@ jobs:
           manifest.write_text(text)
           PYTHON
           dart run flutter_launcher_icons
+      - name: Verify release variant does not request Internet permission
+        run: |
+          if grep -R 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
+            echo 'Offline app must not request Internet permission'
+            exit 1
+          fi
       - name: Verify Android offline channel is packaged
         run: |
           test -f android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
