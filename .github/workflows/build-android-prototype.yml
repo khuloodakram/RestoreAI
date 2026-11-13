@@ -6,6 +6,7 @@ on:
       - 'lib/**'
       - 'test/**'
       - 'test/**'
+      - 'android/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-android-prototype.yml'
   push:
@@ -40,6 +41,10 @@ jobs:
           manifest.write_text(text)
           PYTHON
           dart run flutter_launcher_icons
+      - name: Verify Android offline channel is packaged
+        run: |
+          test -f android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
+          grep -q 'enhanceBasic' android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
       - name: Analyze Flutter source
         run: flutter analyze --no-fatal-infos lib/main.dart
       - name: Test offline model asset integrity checks
