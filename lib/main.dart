@@ -75,30 +75,16 @@ class _RestoreHomeState extends State<RestoreHome> {
   String _serverToken = '';
 
   Future<void> _configureServer() async {
-    final controller = TextEditingController(text: _serverUrl);
-    final tokenController = TextEditingController(text: _serverToken);
-    final next = await showDialog<String>(context: context, builder: (context) => AlertDialog(
-      title: Text(tr('رابط خادم Colab المؤقت', 'Temporary Colab server URL')),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: controller, keyboardType: TextInputType.url,
-          autocorrect: false, decoration: const InputDecoration(
-            hintText: 'https://example.trycloudflare.com')),
-        const SizedBox(height: 12),
-        TextField(controller: tokenController, obscureText: true,
-          decoration: InputDecoration(labelText: tr('رمز الوصول', 'Access token'))),
-      ]),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context),
-          child: Text(tr('إلغاء', 'Cancel'))),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: Text(tr('اتصال', 'Connect'))),
-      ],
-    ));
-    final token = tokenController.text.trim();
-    controller.dispose();
-    tokenController.dispose();
+    final next = await showDialog<({String url, String token})>(
+      context: context,
+      builder: (_) => _ServerConfigDialog(
+        initialUrl: _serverUrl,
+        initialToken: _serverToken,
+        arabic: widget.arabic,
+      ),
+    );
     if (next == null || !mounted) return;
-    final uri = Uri.tryParse(next);
+    final uri = Uri.tryParse(next.url);
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
         uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment ||
         (uri.path.isNotEmpty && uri.path != '/')) {
@@ -106,9 +92,12 @@ class _RestoreHomeState extends State<RestoreHome> {
           'Enter the HTTPS server base URL only.'));
       return;
     }
-    setState(() { _serverUrl = next; _serverToken = token; _error = null; });
+    setState(() {
+      _serverUrl = next.url;
+      _serverToken = next.token;
+      _error = null;
+    });
   }
-
 
   String tr(String ar, String en) => widget.arabic ? ar : en;
 
@@ -433,4 +422,80 @@ class _RestoreHomeState extends State<RestoreHome> {
           ),
         ),
       );
+}
+
+class _ServerConfigDialog extends StatefulWidget {
+  const _ServerConfigDialog({
+    required this.initialUrl,
+    required this.initialToken,
+    required this.arabic,
+  });
+
+  final String initialUrl;
+  final String initialToken;
+  final bool arabic;
+
+  @override
+  State<_ServerConfigDialog> createState() => _ServerConfigDialogState();
+}
+
+class _ServerConfigDialogState extends State<_ServerConfigDialog> {
+  late final TextEditingController _urlController;
+  late final TextEditingController _tokenController;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlController = TextEditingController(text: widget.initialUrl);
+    _tokenController = TextEditingController(text: widget.initialToken);
+  }
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _tokenController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String tr(String ar, String en) => widget.arabic ? ar : en;
+    return AlertDialog(
+      title: Text(tr('رابط خادم Colab المؤقت', 'Temporary Colab server URL')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _urlController,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              hintText: 'https://example.trycloudflare.com',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _tokenController,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: tr('رمز الوصول', 'Access token'),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(tr('إلغاء', 'Cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop((
+            url: _urlController.text.trim(),
+            token: _tokenController.text.trim(),
+          )),
+          child: Text(tr('اتصال', 'Connect')),
+        ),
+      ],
+    );
+  }
 }
