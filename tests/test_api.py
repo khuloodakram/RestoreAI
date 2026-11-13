@@ -46,6 +46,26 @@ class APITests(unittest.TestCase):
         self.assertIn("gpu", response.json())
         self.assertIn("weights_found", response.json())
 
+    def test_token_rejects_missing_or_wrong_credentials(self):
+        with patch.dict("os.environ", {"RESTOREAI_API_TOKEN": "private-test-token"}):
+            for headers in ({}, {"Authorization": "Bearer wrong"}):
+                response = client.post(
+                    "/enhance",
+                    headers=headers,
+                    files={"image": ("a.png", png(), "image/png")},
+                )
+                self.assertEqual(response.status_code, 401)
+
+    def test_token_allows_valid_credentials(self):
+        with patch.dict("os.environ", {"RESTOREAI_API_TOKEN": "private-test-token"}), \
+             patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64))):
+            response = client.post(
+                "/enhance",
+                headers={"Authorization": "Bearer private-test-token"},
+                files={"image": ("a.png", png(), "image/png")},
+            )
+        self.assertEqual(response.status_code, 200)
+
     def test_reject_nonimage(self):
         response = client.post(
             "/enhance", files={"image": ("a.txt", b"hello", "text/plain")}
