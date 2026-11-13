@@ -2,7 +2,6 @@ import 'dart:io';
 import 'scratch_mask_editor.dart';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'package:flutter/material.dart';
@@ -10,21 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String apiUrl = String.fromEnvironment('RESTOREAI_API_URL');
-
-Uint8List enhanceOffline(Uint8List bytes) {
-  final decoded = img.decodeImage(bytes);
-  if (decoded == null) {
-    throw const FormatException('unsupported_image');
-  }
-  // Limit memory use on phones when processing very large photos.
-  final source = decoded.width > 2400 || decoded.height > 2400
-      ? img.copyResize(decoded,
-          width: decoded.width >= decoded.height ? 2400 : null,
-          height: decoded.height > decoded.width ? 2400 : null)
-      : decoded;
-  final adjusted = img.adjustColor(source, contrast: 1.08, brightness: 1.03);
-  return Uint8List.fromList(img.encodeJpg(adjusted, quality: 92));
-}
 
 void main() => runApp(const RestoreAIApp());
 
@@ -87,6 +71,35 @@ class _RestoreHomeState extends State<RestoreHome> {
   bool _busy = false;
   bool _showAfter = true;
   bool _restoreScratches = true;
+  String _serverUrl = apiUrl;
+
+  Future<void> _configureServer() async {
+    final controller = TextEditingController(text: _serverUrl);
+    final next = await showDialog<String>(context: context, builder: (context) => AlertDialog(
+      title: Text(tr('رابط خادم Colab المؤقت', 'Temporary Colab server URL')),
+      content: TextField(controller: controller, keyboardType: TextInputType.url,
+        autocorrect: false, decoration: const InputDecoration(
+          hintText: 'https://example.trycloudflare.com')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context),
+          child: Text(tr('إلغاء', 'Cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: Text(tr('اتصال', 'Connect'))),
+      ],
+    ));
+    controller.dispose();
+    if (next == null || !mounted) return;
+    final uri = Uri.tryParse(next);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment ||
+        (uri.path.isNotEmpty && uri.path != '/')) {
+      setState(() => _error = tr('أدخلي رابط HTTPS الأساسي للخادم فقط.',
+          'Enter the HTTPS server base URL only.'));
+      return;
+    }
+    setState(() { _serverUrl = next; _error = null; });
+  }
+
 
   String tr(String ar, String en) => widget.arabic ? ar : en;
 
@@ -151,44 +164,9 @@ class _RestoreHomeState extends State<RestoreHome> {
     }
   }
 
-  Future<void> _enhanceLocal() async {
-    if (_selected == null || _busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-      _savedPath = null;
-    });
-    try {
-      final bytes = await _selected!.readAsBytes();
-      if (bytes.isEmpty || bytes.length > 25 * 1024 * 1024) {
-        throw const FormatException('invalid_image_size');
-      }
-      final result = await compute(enhanceOffline, bytes);
-      if (!mounted) return;
-      setState(() {
-        _enhanced = result;
-        _showAfter = true;
-      });
-    } on FormatException {
-      if (mounted) {
-        setState(() => _error = tr(
-            'تعذر معالجة الصورة. يرجى اختيار صورة JPG أو PNG مدعومة.',
-            'Unable to process this image. Please choose a supported JPG or PNG.'));
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = tr(
-            'حدث خطأ أثناء التحسين المحلي. يرجى تجربة صورة أخرى.',
-            'Offline enhancement failed. Please try another image.'));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _enhance() async {
-    if (_selected == null || _busy || apiUrl.isEmpty) return;
-    final endpoint = Uri.tryParse(apiUrl);
+    if (_selected == null || _busy || _serverUrl.isEmpty) return;
+    final endpoint = Uri.tryParse(_serverUrl);
     if (endpoint == null || endpoint.scheme != 'https' ||
         endpoint.host.isEmpty || endpoint.userInfo.isNotEmpty) {
       setState(() => _error = tr('عنوان الخادم غير آمن أو غير صالح.',
@@ -399,23 +377,22 @@ class _RestoreHomeState extends State<RestoreHome> {
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
-                onPressed: _selected != null && !_busy && apiUrl.isNotEmpty
+                onPressed: _selected != null && !_busy && _serverUrl.isNotEmpty
                     ? _enhance : null,
                 icon: const Icon(Icons.auto_fix_high),
                 label: Text(_busy ? tr('جارٍ التحسين...', 'Enhancing...')
                     : (_restoreScratches ? tr('ترميم الصورة', 'Restore photo') : tr('تحسين الصورة', 'Enhance photo'))),
               ),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _selected != null && !_busy ? _enhanceLocal : null,
-                icon: const Icon(Icons.tune),
-                label: Text(tr('تحسين محلي أساسي (بدون إنترنت)',
-                    'Basic offline enhancement')),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _configureServer,
+                icon: const Icon(Icons.cloud_outlined),
+                label: Text(tr('ربط خادم Colab المؤقت', 'Connect temporary Colab server')),
               ),
-              Text(tr('ضبط الإضاءة والتباين فقط؛ لا يزيل الخدوش أو يعيد بناء التفاصيل.',
-                  'Brightness and contrast only; does not remove scratches or reconstruct details.'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF8990AB))),
+              if (_serverUrl.isNotEmpty)
+                Text(tr('الخادم مضبوط لهذه الجلسة؛ تأكدي أنه يعمل.',
+                  'Server URL configured for this session; ensure it is running.'),
+                  textAlign: TextAlign.center),
               if (_busy) const LinearProgressIndicator(),
               if (_enhanced != null) ...[
                 const SizedBox(height: 12),
@@ -430,8 +407,8 @@ class _RestoreHomeState extends State<RestoreHome> {
                     'Saved to app files: ') + _savedPath!),
               if (_error != null)
                 Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-              if (apiUrl.isEmpty)
-                Text(tr('ميزة التحسين تحتاج إلى خادم HTTPS مُعدّ مسبقًا. التحسين المحلي متاح بدون إنترنت.',
+              if (_serverUrl.isEmpty)
+                Text(tr('الترميم يحتاج إلى خادم Colab مؤقت. اضغطي على ربط خادم Colab وأدخلي رابط HTTPS.',
                     'Enhancement requires a configured HTTPS server.'),
                     textAlign: TextAlign.center),
               const SizedBox(height: 14),
