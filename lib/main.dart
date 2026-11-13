@@ -1,11 +1,29 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String apiUrl = String.fromEnvironment('RESTOREAI_API_URL');
+
+Uint8List enhanceOffline(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) {
+    throw const FormatException('unsupported_image');
+  }
+  // Limit memory use on phones when processing very large photos.
+  final source = decoded.width > 2400 || decoded.height > 2400
+      ? img.copyResize(decoded,
+          width: decoded.width >= decoded.height ? 2400 : null,
+          height: decoded.height > decoded.width ? 2400 : null)
+      : decoded;
+  final adjusted = img.adjustColor(source, contrast: 1.08, brightness: 1.03);
+  return Uint8List.fromList(img.encodeJpg(adjusted, quality: 92));
+}
 
 void main() => runApp(const RestoreAIApp());
 
@@ -84,6 +102,41 @@ class _RestoreHomeState extends State<RestoreHome> {
         setState(() => _error = tr('تعذر فتح معرض الصور.',
             'Could not open the photo gallery.'));
       }
+    }
+  }
+
+  Future<void> _enhanceLocal() async {
+    if (_selected == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _savedPath = null;
+    });
+    try {
+      final bytes = await _selected!.readAsBytes();
+      if (bytes.isEmpty || bytes.length > 25 * 1024 * 1024) {
+        throw const FormatException('invalid_image_size');
+      }
+      final result = await compute(enhanceOffline, bytes);
+      if (!mounted) return;
+      setState(() {
+        _enhanced = result;
+        _showAfter = true;
+      });
+    } on FormatException {
+      if (mounted) {
+        setState(() => _error = tr(
+            'تعذر معالجة الصورة. يرجى اختيار صورة JPG أو PNG مدعومة.',
+            'Unable to process this image. Please choose a supported JPG or PNG.'));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = tr(
+            'حدث خطأ أثناء التحسين المحلي. يرجى تجربة صورة أخرى.',
+            'Offline enhancement failed. Please try another image.'));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -166,7 +219,7 @@ class _RestoreHomeState extends State<RestoreHome> {
     if (_enhanced == null) return;
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/restoreai_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File('${directory.path}/restoreai_${DateTime.now().millisecondsSinceEpoch}.jpg');
       await file.writeAsBytes(_enhanced!, flush: true);
       if (mounted) setState(() => _savedPath = file.path);
     } catch (_) {
@@ -251,6 +304,17 @@ class _RestoreHomeState extends State<RestoreHome> {
                 label: Text(_busy ? tr('جارٍ التحسين...', 'Enhancing...')
                     : tr('تحسين الصورة', 'Enhance photo')),
               ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _selected != null && !_busy ? _enhanceLocal : null,
+                icon: const Icon(Icons.tune),
+                label: Text(tr('تحسين محلي أساسي (بدون إنترنت)',
+                    'Basic offline enhancement')),
+              ),
+              Text(tr('ضبط الإضاءة والتباين فقط؛ لا يزيل الخدوش أو يعيد بناء التفاصيل.',
+                  'Brightness and contrast only; does not remove scratches or reconstruct details.'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF8990AB))),
               if (_busy) const LinearProgressIndicator(),
               if (_enhanced != null) ...[
                 const SizedBox(height: 12),
@@ -266,7 +330,7 @@ class _RestoreHomeState extends State<RestoreHome> {
               if (_error != null)
                 Text(_error!, style: const TextStyle(color: Colors.redAccent)),
               if (apiUrl.isEmpty)
-                Text(tr('ميزة التحسين تحتاج إلى خادم HTTPS مُعدّ مسبقًا.',
+                Text(tr('ميزة التحسين تحتاج إلى خادم HTTPS مُعدّ مسبقًا. التحسين المحلي متاح بدون إنترنت.',
                     'Enhancement requires a configured HTTPS server.'),
                     textAlign: TextAlign.center),
               const SizedBox(height: 14),
