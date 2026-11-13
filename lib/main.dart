@@ -108,12 +108,15 @@ class _RestoreHomeState extends State<RestoreHome> {
         throw const FormatException('file_too_large');
       }
       final request = await client.postUrl(endpoint.resolve('/enhance'));
-      request.headers.contentType = ContentType('image', 'png');
       // Upload as multipart/form-data, matching FastAPI's "image" field.
       final boundary = 'restoreai-upload-boundary';
       request.headers.set(HttpHeaders.contentTypeHeader,
           'multipart/form-data; boundary=$boundary');
-      const name = 'photo.jpg';
+      final extension = _selected!.name.toLowerCase().split('.').last;
+      final mime = extension == 'png' ? 'image/png'
+          : extension == 'webp' ? 'image/webp' : 'image/jpeg';
+      final name = extension == 'png' ? 'photo.png'
+          : extension == 'webp' ? 'photo.webp' : 'photo.jpg';
       request.add(utf8Bytes('--$boundary\r\n'
           'Content-Disposition: form-data; name="image"; filename="$name"\r\n'
           'Content-Type: image/jpeg\r\n\r\n'));
