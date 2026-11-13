@@ -2,10 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-
-const String apiUrl = String.fromEnvironment('RESTOREAI_API_URL');
 
 void main() => runApp(const RestoreAIApp());
 
@@ -87,80 +86,40 @@ class _RestoreHomeState extends State<RestoreHome> {
     }
   }
 
-  Future<void> _enhance() async {
-    if (_selected == null || _busy || apiUrl.isEmpty) return;
-    final endpoint = Uri.tryParse(apiUrl);
-    if (endpoint == null || endpoint.scheme != 'https' ||
-        endpoint.host.isEmpty || endpoint.userInfo.isNotEmpty) {
-      setState(() => _error = tr('عنوان الخادم غير آمن أو غير صالح.',
-          'The server URL is invalid or insecure.'));
-      return;
-    }
+  Future<void> _enhanceBasicOffline() async {
+    if (_selected == null || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
       _savedPath = null;
     });
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
     try {
-      final bytes = await _selected!.readAsBytes();
-      if (bytes.length > 8 * 1024 * 1024) {
-        throw const FormatException('file_too_large');
-      }
-      final request = await client.postUrl(endpoint.resolve('/enhance'));
-      // Upload as multipart/form-data, matching FastAPI's "image" field.
-      final boundary = 'restoreai-upload-boundary';
-      request.headers.set(HttpHeaders.contentTypeHeader,
-          'multipart/form-data; boundary=$boundary');
-      final extension = _selected!.name.toLowerCase().split('.').last;
-      final mime = extension == 'png' ? 'image/png'
-          : extension == 'webp' ? 'image/webp' : 'image/jpeg';
-      final name = extension == 'png' ? 'photo.png'
-          : extension == 'webp' ? 'photo.webp' : 'photo.jpg';
-      request.add(utf8Bytes('--$boundary\r\n'
-          'Content-Disposition: form-data; name="image"; filename="$name"\r\n'
-          'Content-Type: $mime\r\n\r\n'));
-      request.add(bytes);
-      request.add(utf8Bytes('\r\n--$boundary--\r\n'));
-      final response = await request.close().timeout(const Duration(minutes: 3));
-      const maxResponseBytes = 96 * 1024 * 1024;
-      if (response.contentLength > maxResponseBytes) {
-        throw const FormatException('response_too_large');
-      }
-      final result = await response.fold<List<int>>(
-          <int>[], (previous, chunk) {
-            if (previous.length + chunk.length > maxResponseBytes) {
-              throw const FormatException('response_too_large');
-            }
-            return previous..addAll(chunk);
-          })
-          .timeout(const Duration(minutes: 3));
-      if (response.statusCode != 200 ||
-          response.headers.contentType?.mimeType != 'image/png') {
-        throw HttpException('HTTP ${response.statusCode}');
-      }
+      final directory = await getApplicationDocumentsDirectory();
+      final output = '${directory.path}/restoreai_basic_${DateTime.now().microsecondsSinceEpoch}.png';
+      const channel = MethodChannel('restoreai/offline_inference');
+      final path = await channel.invokeMethod<String>('enhanceBasic', {
+        'inputPath': _selected!.path,
+        'outputPath': output,
+      });
+      if (path != output) throw const FormatException('Unexpected output');
+      final bytes = await File(output).readAsBytes();
+      if (bytes.isEmpty) throw const FormatException('Empty output');
       if (!mounted) return;
       setState(() {
-        _enhanced = Uint8List.fromList(result);
+        _enhanced = bytes;
+        _savedPath = output;
         _showAfter = true;
       });
     } catch (_) {
       if (mounted) {
         setState(() => _error = tr(
-            'فشل التحسين. تأكدي من تشغيل خادم الذكاء الاصطناعي وحاولي مجددًا.',
-            'Enhancement failed. Check that the AI server is running and retry.'));
+            'فشل التحسين المحلي. تأكدي من اختيار صورة مدعومة.',
+            'Local enhancement failed. Choose a supported image.'));
       }
     } finally {
-      client.close(force: true);
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
     }
   }
-
-  List<int> utf8Bytes(String value) => value.codeUnits.every((c) => c < 128)
-      ? value.codeUnits
-      : throw const FormatException('Non-ASCII multipart header');
 
   Future<void> _save() async {
     if (_enhanced == null) return;
@@ -203,8 +162,8 @@ class _RestoreHomeState extends State<RestoreHome> {
                   style: const TextStyle(
                       fontSize: 26, fontWeight: FontWeight.w800)),
               const SizedBox(height: 12),
-              Text(tr('تحسين تفاصيل الصور بالذكاء الاصطناعي.',
-                  'Enhance photo details with AI.'),
+              Text(tr('تحسين صورك محليًا. ميزة الذكاء الاصطناعي قيد التطوير.',
+                  'Enhance photos locally. Offline AI is in development.'),
                   textAlign: TextAlign.center),
               const SizedBox(height: 28),
               Container(
@@ -245,12 +204,16 @@ class _RestoreHomeState extends State<RestoreHome> {
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
-                onPressed: _selected != null && !_busy && apiUrl.isNotEmpty
-                    ? _enhance : null,
-                icon: const Icon(Icons.auto_fix_high),
-                label: Text(_busy ? tr('جارٍ التحسين...', 'Enhancing...')
-                    : tr('تحسين الصورة', 'Enhance photo')),
+                onPressed: _selected != null && !_busy
+                    ? _enhanceBasicOffline : null,
+                icon: const Icon(Icons.tune),
+                label: Text(tr('تحسين محلي أساسي (بدون AI)',
+                    'Basic offline enhancement (not AI)')),
               ),
+              Text(tr('تعديل إضاءة وتباين فقط، بدون إنترنت. لا يزيل الخدوش ولا يزيد التفاصيل بالذكاء الاصطناعي.',
+                  'Brightness and contrast only, no internet. Does not remove scratches or add AI detail.'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF8990AB))),
               if (_busy) const LinearProgressIndicator(),
               if (_enhanced != null) ...[
                 const SizedBox(height: 12),
@@ -265,10 +228,6 @@ class _RestoreHomeState extends State<RestoreHome> {
                     'Saved to app files: ') + _savedPath!),
               if (_error != null)
                 Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-              if (apiUrl.isEmpty)
-                Text(tr('ميزة التحسين تحتاج إلى خادم HTTPS مُعدّ مسبقًا.',
-                    'Enhancement requires a configured HTTPS server.'),
-                    textAlign: TextAlign.center),
               const SizedBox(height: 14),
               Text(tr('ملاحظة: تحسين الدقة لا يزيل الخدوش تلقائيًا.',
                   'Note: Super-resolution does not automatically remove scratches.'),

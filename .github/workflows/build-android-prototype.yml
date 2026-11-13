@@ -1,9 +1,22 @@
 name: Build RestoreAI Android prototype
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'tests/**'
+      - 'scripts/check_android_offline_assets.py'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-android-prototype.yml'
   push:
     paths:
       - 'lib/**'
+      - 'test/**'
+      - 'tests/**'
+      - 'scripts/check_android_offline_assets.py'
+      - 'android/**'
       - 'pubspec.yaml'
       - 'assets/icon/**'
       - '.github/workflows/build-android-prototype.yml'
@@ -28,18 +41,47 @@ jobs:
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
           text = text.replace('android:label="restoreai"', 'android:label="RestoreAI"')
-          if 'android.permission.INTERNET' not in text:
-              text = text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
           manifest.write_text(text)
           PYTHON
           dart run flutter_launcher_icons
+      - name: Verify release variant does not request Internet permission
+        run: |
+          if grep -R 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
+            echo 'Offline app must not request Internet permission'
+            exit 1
+          fi
+      - name: Prevent accidental network upload in offline UI
+        run: |
+          if grep -En 'HttpClient|RESTOREAI_API_URL|postUrl|https?://' lib/main.dart; then
+            echo 'Network code found in offline Flutter entrypoint'
+            exit 1
+          fi
+      - name: Verify Android offline channel is packaged
+        run: |
+          test -f android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
+          grep -q 'enhanceBasic' android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
       - name: Analyze Flutter source
         run: flutter analyze --no-fatal-infos lib/main.dart
+      - name: Test offline model asset integrity checks
+        run: python3 -m unittest discover -s tests -p 'test_offline_assets.py'
+      - name: Test offline engine contract
+        run: flutter test test/offline_restore_pipeline_test.dart test/android_restore_engine_test.dart
       - name: Build Android APK
-        run: flutter build apk --debug
+        run: flutter build apk --release
+      - name: Verify release APK permissions
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          test -n "$AAPT"
+          "$AAPT" dump permissions "$APK" | tee /tmp/restoreai-permissions.txt
+          if grep -q 'android.permission.INTERNET' /tmp/restoreai-permissions.txt; then
+            echo 'Release APK unexpectedly requests Internet permission'
+            exit 1
+          fi
       - name: Upload prototype APK
         uses: actions/upload-artifact@v4
         with:
-          name: RestoreAI-Phase2-UI-Prototype-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: RestoreAI-Offline-Basic-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
