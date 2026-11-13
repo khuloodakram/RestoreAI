@@ -72,14 +72,21 @@ class _RestoreHomeState extends State<RestoreHome> {
   bool _showAfter = true;
   bool _restoreScratches = true;
   String _serverUrl = apiUrl;
+  String _serverToken = '';
 
   Future<void> _configureServer() async {
     final controller = TextEditingController(text: _serverUrl);
+    final tokenController = TextEditingController(text: _serverToken);
     final next = await showDialog<String>(context: context, builder: (context) => AlertDialog(
       title: Text(tr('رابط خادم Colab المؤقت', 'Temporary Colab server URL')),
-      content: TextField(controller: controller, keyboardType: TextInputType.url,
-        autocorrect: false, decoration: const InputDecoration(
-          hintText: 'https://example.trycloudflare.com')),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: controller, keyboardType: TextInputType.url,
+          autocorrect: false, decoration: const InputDecoration(
+            hintText: 'https://example.trycloudflare.com')),
+        const SizedBox(height: 12),
+        TextField(controller: tokenController, obscureText: true,
+          decoration: InputDecoration(labelText: tr('رمز الوصول', 'Access token'))),
+      ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context),
           child: Text(tr('إلغاء', 'Cancel'))),
@@ -87,7 +94,9 @@ class _RestoreHomeState extends State<RestoreHome> {
           child: Text(tr('اتصال', 'Connect'))),
       ],
     ));
+    final token = tokenController.text.trim();
     controller.dispose();
+    tokenController.dispose();
     if (next == null || !mounted) return;
     final uri = Uri.tryParse(next);
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
@@ -97,7 +106,7 @@ class _RestoreHomeState extends State<RestoreHome> {
           'Enter the HTTPS server base URL only.'));
       return;
     }
-    setState(() { _serverUrl = next; _error = null; });
+    setState(() { _serverUrl = next; _serverToken = token; _error = null; });
   }
 
 
@@ -185,6 +194,9 @@ class _RestoreHomeState extends State<RestoreHome> {
         throw const FormatException('file_too_large');
       }
       final request = await client.postUrl(endpoint.resolve('/enhance'));
+      if (_serverToken.isNotEmpty) {
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_serverToken');
+      }
       // Upload as multipart/form-data, matching FastAPI's "image" field.
       final boundary = 'restoreai-upload-boundary';
       request.headers.set(HttpHeaders.contentTypeHeader,
