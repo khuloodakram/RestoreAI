@@ -1,0 +1,39 @@
+
+name: Verify Real-ESRGAN NCNN model
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/verify-model.yml'
+      - 'scripts/verify_realesrgan.py'
+
+jobs:
+  linux-inference-smoke-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vulkan CPU driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan1 mesa-vulkan-drivers vulkan-tools
+          vulkaninfo --summary || true
+
+      - name: Verify Python source syntax
+        run: python3 -m py_compile scripts/verify_realesrgan.py
+
+      - name: Run actual neural network inference
+        run: python3 scripts/verify_realesrgan.py
+
+      - name: Upload test images and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restoreai-model-test
+          path: |
+            ${{ runner.temp }}/restoreai-check/input.png
+            ${{ runner.temp }}/restoreai-check/enhanced.png
+          if-no-files-found: ignore
