@@ -70,22 +70,19 @@ def restore_visible_scratches(image):
     """
     rgb = np.asarray(image.convert("RGB"))
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    # Bright, thin lines against their local surroundings at several orientations.
-    candidates = np.zeros(gray.shape, dtype=np.uint8)
-    for angle in (0, 45, 90, 135):
-        theta = np.deg2rad(angle)
-        dx, dy = int(round(8 * np.cos(theta))), int(round(8 * np.sin(theta)))
-        kernel = np.zeros((17, 17), dtype=np.uint8)
-        cv2.line(kernel, (8 - dx, 8 - dy), (8 + dx, 8 + dy), 1, 1)
-        response = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
-        candidates = cv2.max(candidates, response)
-    mask = (candidates > 42).astype(np.uint8) * 255
+    # A round opening removes thin highlights in any orientation. Restrict
+    # candidates to bright pixels that differ substantially from their vicinity.
+    # This is conservative: false positives can damage facial details.
+    background = cv2.morphologyEx(gray, cv2.MORPH_OPEN,
+                                  cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
+    candidates = cv2.subtract(gray, background)
+    mask = ((candidates > 38) & (gray > 135)).astype(np.uint8) * 255
     # Only retain narrow connected components of meaningful length.
     count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     clean = np.zeros_like(mask)
     for i in range(1, count):
         x, y, w, h, area = stats[i]
-        if 12 <= area <= 1500 and max(w, h) >= 14 and area / max(w * h, 1) < 0.55:
+        if 10 <= area <= 1500 and max(w, h) >= 12 and area / max(w * h, 1) < 0.48:
             clean[labels == i] = 255
     if not np.any(clean):
         return image
