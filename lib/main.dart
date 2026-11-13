@@ -123,8 +123,17 @@ class _RestoreHomeState extends State<RestoreHome> {
       request.add(bytes);
       request.add(utf8Bytes('\r\n--$boundary--\r\n'));
       final response = await request.close().timeout(const Duration(minutes: 3));
+      const maxResponseBytes = 96 * 1024 * 1024;
+      if (response.contentLength > maxResponseBytes) {
+        throw const FormatException('response_too_large');
+      }
       final result = await response.fold<List<int>>(
-          <int>[], (previous, chunk) => previous..addAll(chunk))
+          <int>[], (previous, chunk) {
+            if (previous.length + chunk.length > maxResponseBytes) {
+              throw const FormatException('response_too_large');
+            }
+            return previous..addAll(chunk);
+          })
           .timeout(const Duration(minutes: 3));
       if (response.statusCode != 200 ||
           response.headers.contentType?.mimeType != 'image/png') {
