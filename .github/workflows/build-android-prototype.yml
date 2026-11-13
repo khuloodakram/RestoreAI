@@ -1,6 +1,13 @@
 name: Build RestoreAI Android prototype
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-android-prototype.yml'
   push:
     paths:
       - 'lib/**'
@@ -35,6 +42,8 @@ jobs:
           dart run flutter_launcher_icons
       - name: Analyze Flutter source
         run: flutter analyze --no-fatal-infos lib/main.dart
+      - name: Test offline engine contract
+        run: flutter test test/offline_restore_pipeline_test.dart
       - name: Build Android APK
         run: flutter build apk --debug
       - name: Upload prototype APK
