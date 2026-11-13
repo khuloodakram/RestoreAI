@@ -5,13 +5,18 @@ on:
     paths:
       - 'lib/**'
       - 'test/**'
-      - 'test/**'
+      - 'tests/**'
+      - 'scripts/check_android_offline_assets.py'
       - 'android/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-android-prototype.yml'
   push:
     paths:
       - 'lib/**'
+      - 'test/**'
+      - 'tests/**'
+      - 'scripts/check_android_offline_assets.py'
+      - 'android/**'
       - 'pubspec.yaml'
       - 'assets/icon/**'
       - '.github/workflows/build-android-prototype.yml'
