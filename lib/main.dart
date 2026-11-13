@@ -83,6 +83,7 @@ class _RestoreHomeState extends State<RestoreHome> {
   String? _error;
   bool _busy = false;
   bool _showAfter = true;
+  bool _restoreScratches = true;
 
   String tr(String ar, String en) => widget.arabic ? ar : en;
 
@@ -174,6 +175,9 @@ class _RestoreHomeState extends State<RestoreHome> {
           'Content-Disposition: form-data; name="image"; filename="$name"\r\n'
           'Content-Type: $mime\r\n\r\n'));
       request.add(bytes);
+      request.add(utf8Bytes('\r\n--$boundary\r\n'
+          'Content-Disposition: form-data; name="mode"\r\n\r\n'
+          '${_restoreScratches ? 'restore' : 'enhance'}'));
       request.add(utf8Bytes('\r\n--$boundary--\r\n'));
       final response = await request.close().timeout(const Duration(minutes: 3));
       const maxResponseBytes = 96 * 1024 * 1024;
@@ -290,6 +294,15 @@ class _RestoreHomeState extends State<RestoreHome> {
                       setState(() => _showAfter = value.first),
                 ),
               ],
+              const SizedBox(height: 18),
+              SegmentedButton<bool>(
+                segments: [
+                  ButtonSegment(value: true, label: Text(tr('ترميم الخدوش', 'Restore scratches'))),
+                  ButtonSegment(value: false, label: Text(tr('تحسين الدقة', 'Enhance resolution'))),
+                ],
+                selected: {_restoreScratches},
+                onSelectionChanged: (value) => setState(() => _restoreScratches = value.first),
+              ),
               const SizedBox(height: 22),
               FilledButton.icon(
                 onPressed: _busy ? null : _pickImage,
@@ -302,7 +315,7 @@ class _RestoreHomeState extends State<RestoreHome> {
                     ? _enhance : null,
                 icon: const Icon(Icons.auto_fix_high),
                 label: Text(_busy ? tr('جارٍ التحسين...', 'Enhancing...')
-                    : tr('تحسين الصورة', 'Enhance photo')),
+                    : (_restoreScratches ? tr('ترميم الصورة', 'Restore photo') : tr('تحسين الصورة', 'Enhance photo'))),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(
@@ -334,7 +347,7 @@ class _RestoreHomeState extends State<RestoreHome> {
                     'Enhancement requires a configured HTTPS server.'),
                     textAlign: TextAlign.center),
               const SizedBox(height: 14),
-              Text(tr('ملاحظة: تحسين الدقة لا يزيل الخدوش تلقائيًا.',
+              Text(tr('ملاحظة: الترميم التلقائي تجريبي وقد لا يزيل جميع الخدوش.',
                   'Note: Super-resolution does not automatically remove scratches.'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Color(0xFF8990AB),
