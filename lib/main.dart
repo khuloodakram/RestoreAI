@@ -205,15 +205,15 @@ class _RestoreHomeState extends State<RestoreHome> {
         if (maskBytes.isEmpty || maskBytes.length > 8 * 1024 * 1024) {
           throw const FormatException('mask_too_large');
         }
-        request.add(utf8Bytes('\\r\\n--$boundary\\r\\n'
-            'Content-Disposition: form-data; name="mask"; filename="mask.png"\\r\\n'
-            'Content-Type: image/png\\r\\n\\r\\n'));
+        request.add(utf8Bytes('\r\n--$boundary\r\n'
+            'Content-Disposition: form-data; name="mask"; filename="mask.png"\r\n'
+            'Content-Type: image/png\r\n\r\n'));
         // Decode and re-encode as PNG, regardless of selected file extension.
         final maskImage = img.decodeImage(maskBytes);
         if (maskImage == null) throw const FormatException('invalid_mask');
         request.add(img.encodePng(maskImage));
       }
-      request.add(utf8Bytes('\\r\\n--$boundary--\\r\\n'));
+      request.add(utf8Bytes('\r\n--$boundary--\r\n'));
       final response = await request.close().timeout(const Duration(minutes: 3));
       const maxResponseBytes = 96 * 1024 * 1024;
       if (response.contentLength > maxResponseBytes) {
