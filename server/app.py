@@ -152,10 +152,13 @@ async def enhance(image: UploadFile = File(...), mode: str = Form("enhance"),
             raise HTTPException(413, "Invalid mask size")
         try:
             with Image.open(io.BytesIO(raw_mask)) as opened_mask:
+                if opened_mask.width * opened_mask.height > MAX_PIXELS:
+                    raise HTTPException(413, "Mask exceeds 2 megapixels")
                 opened_mask.load()
-                if opened_mask.size != rgb.size:
+                oriented_mask = ImageOps.exif_transpose(opened_mask)
+                if oriented_mask.size != rgb.size:
                     raise HTTPException(422, "Mask dimensions must match source image")
-                custom_mask = np.asarray(opened_mask.convert("L"))
+                custom_mask = np.asarray(oriented_mask.convert("L"))
                 custom_mask = np.where(custom_mask > 127, 255, 0).astype(np.uint8)
         except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
             raise HTTPException(400, "Invalid mask image")
