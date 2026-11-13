@@ -55,7 +55,7 @@ class _ScratchMaskEditorState extends State<ScratchMaskEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(tr('تحديد الخدوش', 'Mark scratches')),
-      actions: [TextButton(onPressed: _saving ? null : () async {
+      actions: [TextButton(onPressed: _saving || _strokes.isEmpty ? null : () async {
         setState(() => _saving = true);
         try {
           final result = await _export();
