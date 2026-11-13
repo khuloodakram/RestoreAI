@@ -40,7 +40,7 @@ jobs:
           PYTHON
           dart run flutter_launcher_icons
       - name: Analyze Flutter source
-        run: flutter analyze --no-fatal-infos lib/main.dart
+        run: flutter analyze --no-fatal-infos lib/
       - name: Build Android APK
         run: flutter build apk --debug
       - name: Upload prototype APK
