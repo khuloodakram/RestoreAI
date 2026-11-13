@@ -1,5 +1,6 @@
 """RestoreAI GPU FastAPI service using pretrained Real-ESRGAN x4plus weights."""
 import io
+import secrets
 import os
 import threading
 from pathlib import Path
@@ -8,7 +9,7 @@ import cv2
 import numpy as np
 import torch
 from basicsr.archs.rrdbnet_arch import RRDBNet
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Header
 from fastapi.responses import Response
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -123,7 +124,12 @@ def health():
 
 @app.post("/enhance")
 async def enhance(image: UploadFile = File(...), mode: str = Form("enhance"),
-                  mask: UploadFile | None = File(None)):
+                  mask: UploadFile | None = File(None),
+                  authorization: str | None = Header(None)):
+    required_token = os.getenv('RESTOREAI_API_TOKEN', '')
+    if required_token and not secrets.compare_digest(
+            authorization or '', 'Bearer ' + required_token):
+        raise HTTPException(401, 'Unauthorized')
     if mode not in ("enhance", "restore"):
         raise HTTPException(422, "Unsupported mode")
     if image.content_type not in ("image/png", "image/jpeg", "image/webp"):
