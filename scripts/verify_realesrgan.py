@@ -67,16 +67,26 @@ def main():
         raise RuntimeError('Executable missing from official Linux archive')
     exe = executables[0]
     exe.chmod(exe.stat().st_mode | 0o111)
-    model_dirs = sorted({p.parent for p in unpack.rglob('realesrgan-x4plus.param')})
-    if not model_dirs:
-        raise RuntimeError('realesrgan-x4plus.param not found in archive')
-    model_dir = model_dirs[0]
-    if not (model_dir / 'realesrgan-x4plus.bin').is_file():
-        raise RuntimeError('Model .bin missing')
+    # Official release bundles differ: choose a real matched .param/.bin pair.
+    pairs = []
+    for param in unpack.rglob('*.param'):
+        binary = param.with_suffix('.bin')
+        if binary.is_file():
+            pairs.append(param)
+    print('Available model pairs:', [str(p.relative_to(unpack)) for p in pairs], flush=True)
+    if not pairs:
+        raise RuntimeError('No matching NCNN .param/.bin model files in archive')
+    preferred = ('realesrgan-x4plus', 'realesrnet-x4plus', 'realesr-animevideov3', 'realesrgan-x4plus-anime')
+    selected = next((p for name in preferred for p in pairs if p.stem == name), None)
+    if selected is None:
+        raise RuntimeError('No recognized Real-ESRGAN model found; inspect available model pairs above')
+    model_dir = selected.parent
+    model_name = selected.stem
+    print('Selected model:', model_name, flush=True)
     src = ROOT / 'input.png'
     dst = ROOT / 'enhanced.png'
     make_png(src)
-    command = [str(exe), '-i', str(src), '-o', str(dst), '-n', 'realesrgan-x4plus', '-m', str(model_dir), '-s', '4', '-g', '-1', '-t', '32', '-v']
+    command = [str(exe), '-i', str(src), '-o', str(dst), '-n', model_name, '-m', str(model_dir), '-s', '4', '-g', '-1', '-t', '32', '-v']
     print('Executing:', ' '.join(command), flush=True)
     result = subprocess.run(command, cwd=exe.parent, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
     print(result.stdout[-12000:], flush=True)
