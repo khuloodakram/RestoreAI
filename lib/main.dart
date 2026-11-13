@@ -347,7 +347,18 @@ class _RestoreHomeState extends State<RestoreHome> {
                   icon: const Icon(Icons.brush_outlined),
                   label: Text(tr('اختيار قناع خدوش (اختياري)', 'Choose scratch mask (optional)')),
                 ),
-                if (_mask != null) Text(tr('تم اختيار قناع الخدوش', 'Scratch mask selected'), textAlign: TextAlign.center),
+                if (_mask != null) ...[
+                  const SizedBox(height: 8),
+                  Text(tr('معاينة القناع: الأبيض يُرمَّم والأسود يُحفَظ',
+                      'Mask preview: white is repaired, black is preserved'),
+                      textAlign: TextAlign.center),
+                  SizedBox(height: 140, child: Image.file(File(_mask!.path), fit: BoxFit.contain)),
+                  TextButton.icon(
+                    onPressed: _busy ? null : () => setState(() => _mask = null),
+                    icon: const Icon(Icons.close),
+                    label: Text(tr('إزالة القناع', 'Remove mask')),
+                  ),
+                ],
               ],
               const SizedBox(height: 22),
               FilledButton.icon(
@@ -394,7 +405,7 @@ class _RestoreHomeState extends State<RestoreHome> {
                     textAlign: TextAlign.center),
               const SizedBox(height: 14),
               Text(tr('ملاحظة: الترميم التلقائي تجريبي وقد لا يزيل جميع الخدوش.',
-                  'Note: Super-resolution does not automatically remove scratches.'),
+                  'Note: Automatic restoration is experimental and may miss scratches.'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Color(0xFF8990AB),
                       fontSize: 12)),
