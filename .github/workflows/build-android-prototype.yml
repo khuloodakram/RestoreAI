@@ -43,7 +43,7 @@ jobs:
       - name: Analyze Flutter source
         run: flutter analyze --no-fatal-infos lib/main.dart
       - name: Test offline engine contract
-        run: flutter test test/offline_restore_pipeline_test.dart
+        run: flutter test test/offline_restore_pipeline_test.dart test/android_restore_engine_test.dart
       - name: Build Android APK
         run: flutter build apk --debug
       - name: Upload prototype APK
