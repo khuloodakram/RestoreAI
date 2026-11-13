@@ -50,6 +50,12 @@ jobs:
             echo 'Offline app must not request Internet permission'
             exit 1
           fi
+      - name: Prevent accidental network upload in offline UI
+        run: |
+          if grep -En 'HttpClient|RESTOREAI_API_URL|postUrl|https?://' lib/main.dart; then
+            echo 'Network code found in offline Flutter entrypoint'
+            exit 1
+          fi
       - name: Verify Android offline channel is packaged
         run: |
           test -f android/app/src/main/kotlin/com/restoreai/restoreai/MainActivity.kt
