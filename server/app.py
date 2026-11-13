@@ -4,10 +4,11 @@ import os
 import threading
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 from basicsr.archs.rrdbnet_arch import RRDBNet
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -60,6 +61,38 @@ def enhance_tiled(image):
     return Image.fromarray(result, mode="RGB")
 
 
+
+
+def restore_visible_scratches(image):
+    """Conservative automatic thin bright-scratch cleanup; not a generative model.
+
+    Avoid aggressive masks on faces: detection can confuse highlights and hair.
+    """
+    rgb = np.asarray(image.convert("RGB"))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    # Bright, thin lines against their local surroundings at several orientations.
+    candidates = np.zeros(gray.shape, dtype=np.uint8)
+    for angle in (0, 45, 90, 135):
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 1))
+        rotation = cv2.getRotationMatrix2D((8, 8), angle, 1)
+        kernel = cv2.warpAffine(kernel, rotation, (17, 17), flags=cv2.INTER_NEAREST)
+        kernel = (kernel > 0).astype(np.uint8)
+        response = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+        candidates = cv2.max(candidates, response)
+    mask = (candidates > 42).astype(np.uint8) * 255
+    # Only retain narrow connected components of meaningful length.
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    clean = np.zeros_like(mask)
+    for i in range(1, count):
+        x, y, w, h, area = stats[i]
+        if 12 <= area <= 1500 and max(w, h) >= 14 and area / max(w * h, 1) < 0.55:
+            clean[labels == i] = 255
+    if not np.any(clean):
+        return image
+    clean = cv2.dilate(clean, np.ones((3, 3), np.uint8), iterations=1)
+    repaired = cv2.inpaint(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), clean, 3, cv2.INPAINT_TELEA)
+    return Image.fromarray(cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB))
+
 @app.get("/health")
 def health():
     return {"status": "ok", "gpu": torch.cuda.is_available(),
@@ -68,7 +101,9 @@ def health():
 
 
 @app.post("/enhance")
-async def enhance(image: UploadFile = File(...)):
+async def enhance(image: UploadFile = File(...), mode: str = Form("enhance")):
+    if mode not in ("enhance", "restore"):
+        raise HTTPException(422, "Unsupported mode")
     if image.content_type not in ("image/png", "image/jpeg", "image/webp"):
         raise HTTPException(415, "JPEG, PNG or WebP required")
     data = await image.read(MAX_BYTES + 1)
@@ -88,7 +123,8 @@ async def enhance(image: UploadFile = File(...)):
 
     try:
         with _lock:
-            enhanced = enhance_tiled(rgb)
+            source = restore_visible_scratches(rgb) if mode == 'restore' else rgb
+            enhanced = enhance_tiled(source)
         output = io.BytesIO()
         enhanced.save(output, format="PNG")
         return Response(output.getvalue(), media_type="image/png",
