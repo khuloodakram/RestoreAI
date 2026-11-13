@@ -63,10 +63,10 @@ jobs:
       - name: Test offline engine contract
         run: flutter test test/offline_restore_pipeline_test.dart test/android_restore_engine_test.dart
       - name: Build Android APK
-        run: flutter build apk --debug
+        run: flutter build apk --release
       - name: Upload prototype APK
         uses: actions/upload-artifact@v4
         with:
-          name: RestoreAI-Phase2-UI-Prototype-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: RestoreAI-Offline-Basic-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
