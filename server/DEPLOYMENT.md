@@ -45,3 +45,7 @@ Without that value, the Enhance button stays disabled. Never put private tokens 
 - Verify inference with real test photos, including scratch and face-quality cases; synthetic scratch regression tests are not proof of portrait quality
 - Test Android networking, save/export and user experience on physical devices
 - Configure Android release signing and distribution
+
+## Optional pretrained LaMa restoration (experimental)
+
+Install `pip install -r server/requirements-lama.txt` on a compatible GPU runtime, then set `RESTOREAI_RESTORE_ENGINE=lama` before starting the API. The first request may download pretrained LaMa weights; provision network access and persistent model cache. The default `opencv` engine is intentionally retained for existing installations. With `lama`, the automatic mask detector still limits quality: missed scratches remain and false positives can alter facial details. A future manual mask editor and portrait validation are required before claiming professional scratch restoration. If LaMa cannot load, the API reports an error instead of silently returning an OpenCV result. Do not run this in production without checking model licensing, security, and photo privacy.
