@@ -62,3 +62,29 @@ else:
 ```
 
 **Do not expose the Colab server publicly without authentication**. Colab sessions expire and are unsuitable for a production backend. Before public release: provision a persistent HTTPS GPU server, protect uploads, define retention/deletion, rate-limit requests, and test Android against that real endpoint.
+
+## 4. Test a privately supplied manual scratch mask
+
+Upload the source image and its **same-size** grayscale mask to your private Colab session as `/content/scratched.png` and `/content/scratch_mask.png`. White = repair, black = preserve. Do not add either file to GitHub.
+
+```python
+import io, os
+from pathlib import Path
+from fastapi.testclient import TestClient
+from server.app import app
+os.environ['RESTOREAI_RESTORE_ENGINE'] = 'lama'
+client = TestClient(app)
+response = client.post('/enhance',
+    files={
+      'image': ('scratched.png', Path('/content/scratched.png').read_bytes(), 'image/png'),
+      'mask': ('scratch_mask.png', Path('/content/scratch_mask.png').read_bytes(), 'image/png'),
+    },
+    data={'mode': 'restore'}, timeout=240)
+print(response.status_code)
+if response.status_code == 200:
+    Path('/content/lama_manual_mask_result.png').write_bytes(response.content)
+else:
+    print(response.text[:500])
+```
+
+The manual mask should be visually inspected and corrected before inference. A too-wide mask can erase facial features; a too-narrow mask leaves white edges. A model-generated reconstruction is not guaranteed to match the original lost pixels.
