@@ -74,7 +74,7 @@ class APITests(unittest.TestCase):
         self.assertTrue(np.array_equal(result[110, 10], source[110, 10]))
 
     def test_restore_mode_runs_scratch_stage(self):
-        with patch("server.app.restore_visible_scratches", side_effect=lambda im: im) as restore, \
+        with patch("server.app.restore_visible_scratches", side_effect=lambda im, mask=None: im) as restore, \
              patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64), "blue")):
             response = client.post("/enhance",
                 files={"image": ("a.png", png(), "image/png")},
@@ -84,7 +84,7 @@ class APITests(unittest.TestCase):
 
     def test_lama_engine_routing(self):
         with patch.dict("os.environ", {"RESTOREAI_RESTORE_ENGINE": "lama"}), \
-             patch("server.app.restore_with_lama", side_effect=lambda im: im) as lama, \
+             patch("server.app.restore_with_lama", side_effect=lambda im, mask=None: im) as lama, \
              patch("server.app.enhance_tiled", return_value=Image.new("RGB", (64, 64))):
             response = client.post("/enhance",
                 files={"image": ("a.png", png(), "image/png")},
