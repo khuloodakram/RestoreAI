@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -158,6 +159,41 @@ class _RestoreHomeState extends State<RestoreHome> {
     }
   }
 
+  Future<void> _enhanceBasicOffline() async {
+    if (_selected == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _savedPath = null;
+    });
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final output = '${directory.path}/restoreai_basic_${DateTime.now().microsecondsSinceEpoch}.png';
+      const channel = MethodChannel('restoreai/offline_inference');
+      final path = await channel.invokeMethod<String>('enhanceBasic', {
+        'inputPath': _selected!.path,
+        'outputPath': output,
+      });
+      if (path != output) throw const FormatException('Unexpected output');
+      final bytes = await File(output).readAsBytes();
+      if (bytes.isEmpty) throw const FormatException('Empty output');
+      if (!mounted) return;
+      setState(() {
+        _enhanced = bytes;
+        _savedPath = output;
+        _showAfter = true;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = tr(
+            'فشل التحسين المحلي. تأكدي من اختيار صورة مدعومة.',
+            'Local enhancement failed. Choose a supported image.'));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   List<int> utf8Bytes(String value) => value.codeUnits.every((c) => c < 128)
       ? value.codeUnits
       : throw const FormatException('Non-ASCII multipart header');
@@ -251,6 +287,18 @@ class _RestoreHomeState extends State<RestoreHome> {
                 label: Text(_busy ? tr('جارٍ التحسين...', 'Enhancing...')
                     : tr('تحسين الصورة', 'Enhance photo')),
               ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _selected != null && !_busy
+                    ? _enhanceBasicOffline : null,
+                icon: const Icon(Icons.tune),
+                label: Text(tr('تحسين محلي أساسي (بدون AI)',
+                    'Basic offline enhancement (not AI)')),
+              ),
+              Text(tr('تعديل إضاءة وتباين فقط، بدون إنترنت. لا يزيل الخدوش ولا يزيد التفاصيل بالذكاء الاصطناعي.',
+                  'Brightness and contrast only, no internet. Does not remove scratches or add AI detail.'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF8990AB))),
               if (_busy) const LinearProgressIndicator(),
               if (_enhanced != null) ...[
                 const SizedBox(height: 12),
