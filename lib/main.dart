@@ -143,7 +143,9 @@ class _RestoreHomeState extends State<RestoreHome> {
       }
     } finally {
       client.close(force: true);
-      if (mounted) {\n        setState(() => _busy = false);\n      }
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
