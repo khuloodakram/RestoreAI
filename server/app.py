@@ -73,10 +73,10 @@ def restore_visible_scratches(image):
     # Bright, thin lines against their local surroundings at several orientations.
     candidates = np.zeros(gray.shape, dtype=np.uint8)
     for angle in (0, 45, 90, 135):
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 1))
-        rotation = cv2.getRotationMatrix2D((8, 8), angle, 1)
-        kernel = cv2.warpAffine(kernel, rotation, (17, 17), flags=cv2.INTER_NEAREST)
-        kernel = (kernel > 0).astype(np.uint8)
+        theta = np.deg2rad(angle)
+        dx, dy = int(round(8 * np.cos(theta))), int(round(8 * np.sin(theta)))
+        kernel = np.zeros((17, 17), dtype=np.uint8)
+        cv2.line(kernel, (8 - dx, 8 - dy), (8 + dx, 8 + dy), 1, 1)
         response = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
         candidates = cv2.max(candidates, response)
     mask = (candidates > 42).astype(np.uint8) * 255
