@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from PIL import Image
+import numpy as np
+import cv2
 
 # BasicSR is optional in the lightweight CI environment; stub only its
 # architecture import. Actual inference is tested separately on a CUDA host.
@@ -61,6 +63,15 @@ class APITests(unittest.TestCase):
             "/enhance", files={"image": ("a.png", b"", "image/png")}
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_synthetic_bright_scratch_reduction(self):
+        from server.app import restore_visible_scratches
+        source = np.full((120, 160, 3), 75, dtype=np.uint8)
+        cv2.line(source, (10, 10), (145, 100), (245, 245, 245), 2)
+        result = np.asarray(restore_visible_scratches(Image.fromarray(source)))
+        # Verify actual pixel repair rather than merely a successful API call.
+        self.assertLess(float(result[55, 78].mean()), 160)
+        self.assertTrue(np.array_equal(result[110, 10], source[110, 10]))
 
     def test_restore_mode_runs_scratch_stage(self):
         with patch("server.app.restore_visible_scratches", side_effect=lambda im: im) as restore, \
